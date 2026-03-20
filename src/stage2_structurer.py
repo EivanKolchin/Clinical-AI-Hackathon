@@ -120,14 +120,21 @@ def structure_case(anonymised_json_path: str, output_dir: str) -> str:
         "No inference, no paraphrase, no merging sentences. MRI fields ONLY from mri_findings. Restaging ONLY from restaging_mri_findings. "
         "CT fields ONLY from ct_findings. If absent, use null/null/not_found."
     )
+    
+    # Dynamically generate the expected output JSON structure schema template
+    empty_schema = _empty_structured(case_index)
+    schema_template = {k: v for k, v in empty_schema.items() if k not in ["case_index", "is_restaging_mri", "stage1_validation_failed", "verification_required", "verification_reasons"]}
+    
     prompt = f"""
 {system_prompt}
 
 Input segments (labelled buckets):
 {json.dumps(segments, indent=2)}
 
-Return a single JSON object containing groups mri_staging, restaging_mri, ct_staging, pathology, mdt_decision.
-Every field must have keys value, source_text, confidence.
+Return a single JSON object matching exactly this schema containing the detailed fields.
+Every field must be populated with either the extracted data or the default not_found state.
+Expected Schema:
+{json.dumps(schema_template, indent=2)}
 """
     
     start_time = time.time()
