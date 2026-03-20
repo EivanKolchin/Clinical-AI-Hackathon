@@ -47,8 +47,10 @@ class Stage1Segmenter:
         },
         {
             "bucket": "ct_findings",
-            "regex_pattern": r"\bCT\b",
-            "must_have_any_of": ["computed tomography"]
+            "must_have_any_of": [
+                " ct ", "ct scan", "computed tomography", "ct imaging",
+                "ct staging", "abdominal ct"
+            ]
         },
         {
             "bucket": "pathology",
@@ -230,20 +232,23 @@ class Stage1Segmenter:
         Validate case has meaningful content.
         Returns (is_valid, reason_if_invalid)
         """
-        # Check 1: Is mri_findings OR ct_findings non-empty?
-        has_imaging = bool(raw_segments.get("mri_findings") or raw_segments.get("ct_findings"))
-        if not has_imaging:
-            return False, "No imaging segment (MRI or CT) found — likely mis-read table"
-        
-        # Check 2: Is mdt_outcome non-empty?
+        # Check 1: MDT outcome must be present
         has_outcome = bool(raw_segments.get("mdt_outcome"))
         if not has_outcome:
             return False, "MDT outcome segment is empty — cannot extract treatment decision"
         
-        # Check 3: Does raw_segments have ≥4 non-empty buckets?
+        # Check 2: Must have imaging (MRI or CT) OR (pathology + diagnosis)
+        has_imaging = bool(raw_segments.get("mri_findings") or raw_segments.get("ct_findings"))
+        has_pathology_and_diagnosis = bool(
+            raw_segments.get("pathology") and raw_segments.get("diagnosis")
+        )
+        if not (has_imaging or has_pathology_and_diagnosis):
+            return False, "Need imaging report OR (pathology + diagnosis) — insufficient clinical data"
+        
+        # Check 3: Must have ≥3 non-empty buckets (MDT outcome + 2 others minimum)
         non_empty_count = sum(1 for v in raw_segments.values() if v)
-        if non_empty_count < 4:
-            return False, f"Only {non_empty_count} non-empty segments, need ≥4 — sparse content"
+        if non_empty_count < 3:
+            return False, f"Only {non_empty_count} non-empty segments, need ≥3 — sparse content"
         
         return True, None
     
