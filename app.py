@@ -31,13 +31,30 @@ st.markdown(
 )
 
 class StreamlitRedirect(io.StringIO):
-    def __init__(self, placeholder):
+    def __init__(self, placeholder, eta_placeholder=None, progress_bar=None):
         self.placeholder = placeholder
+        self.eta_placeholder = eta_placeholder
+        self.progress_bar = progress_bar
         self.accumulated_output = []
         super().__init__()
 
     def write(self, string):
+        import re
         if string.strip():
+            # Check for ETA string and case progression updates
+            if self.eta_placeholder and "ETA:" in string:
+                match_eta = re.search(r'ETA:\s*([0-9]+m\s*[0-9]+s|Calculating\.\.\.)', string)
+                if match_eta:
+                    self.eta_placeholder.info(f"⏳ **Approximate Time Remaining:** {match_eta.group(1)}")
+                
+                # Try to capture progress fraction
+                match_prog = re.search(r'\(([0-9]+)/([0-9]+)\)', string)
+                if match_prog and self.progress_bar:
+                    current = int(match_prog.group(1))
+                    total = int(match_prog.group(2))
+                    if total > 0:
+                        self.progress_bar.progress(current / total)
+
             self.accumulated_output.append(string.strip())
             # Keep only the last 15 lines so it looks like a clean sliding terminal
             display_text = "\n".join(self.accumulated_output[-15:])
@@ -110,18 +127,25 @@ if st.button("Initiate Pipeline", type="primary"):
                 
                 # Setup a clean visual container for progress logs
                 st.markdown("### Execution Log")
+                
+                eta_placeholder = st.empty()
+                progress_bar = st.empty()
                 progress_placeholder = st.empty()
+                
                 progress_placeholder.code("Initializing Pipeline...", language="bash")
                 
                 # Redirect stdout to our custom streaming widget
                 old_stdout = sys.stdout
-                sys.stdout = StreamlitRedirect(progress_placeholder)
+                sys.stdout = StreamlitRedirect(progress_placeholder, eta_placeholder, progress_bar)
                 
                 try:
                     run_pipeline(file_to_process, "output")
                 finally:
                     # Restore original stdout
                     sys.stdout = old_stdout
+                    # Clear progress visual widgets on complete
+                    eta_placeholder.empty()
+                    progress_bar.empty()
                 
             st.success("Pipeline execution complete. Clinical data structured and verified.")
         except Exception as e:

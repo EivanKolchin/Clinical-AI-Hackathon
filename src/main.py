@@ -104,10 +104,24 @@ def main(docx_path: str, output_dir: str = "output"):
     import time
     structured_files = []
     
-    for anonymised_file in anonymised_files:
+    total_cases = len(anonymised_files)
+    stage2_start = time.time()
+    
+    for idx, anonymised_file in enumerate(anonymised_files):
+        # Calculate Time Remaining (ETA)
+        if idx > 0:
+            elapsed = time.time() - stage2_start
+            avg_time = elapsed / idx
+            remaining_cases = total_cases - idx
+            eta_seconds = int(avg_time * remaining_cases)
+            m, s = divmod(eta_seconds, 60)
+            eta_str = f" | ETA: {m}m {s}s"
+        else:
+            eta_str = " | ETA: Calculating..."
+
         case_idx = Path(anonymised_file).stem.replace("case_", "").replace("_anonymised", "")
         try:
-            print(f"  Processing case {case_idx}...")
+            print(f"  Processing case {case_idx} ({idx+1}/{total_cases}){eta_str}")
             result = structure_case(anonymised_file, str(json_dir))
             if result and Path(result).exists():
                 structured_files.append(result)
