@@ -3,7 +3,7 @@ import time
 import os
 import google.generativeai as genai
 from tqdm import tqdm
-from safety_flags import apply_safety_flags
+from .safety_flags import apply_safety_flags
 
 # Expected field scaffold to guarantee schema compliance and deterministic fallbacks
 EMPTY_FIELD = {"value": None, "source_text": None, "confidence": "not_found"}
@@ -93,7 +93,7 @@ def structure_case(anonymised_json_path: str, output_dir: str) -> str:
         raise ValueError("GOOGLE_API_KEY environment variable not set")
         
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-pro-latest') # JSON mode model
+    model = genai.GenerativeModel('gemini-2.0-flash') # Latest stable model with JSON support
     
     with open(anonymised_json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
