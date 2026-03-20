@@ -101,6 +101,7 @@ def main(docx_path: str, output_dir: str = "output"):
     # ============ STAGE 2: LLM Structurer ============
     print("Stage 2: LLM Structuring with Gemini")
     print("-" * 40)
+    import time
     structured_files = []
     
     for anonymised_file in anonymised_files:
@@ -112,6 +113,9 @@ def main(docx_path: str, output_dir: str = "output"):
                 structured_files.append(result)
             else:
                 print(f"⚠️  Stage 2 returned unexpected result for case {case_idx}")
+            
+            # Anti-throttle: Avoid hitting the 15 Requests/Min Free Tier Quota
+            time.sleep(4.5) 
         except Exception as e:
             print(f"❌ Stage 2 failed for case {case_idx}: {e}")
             continue

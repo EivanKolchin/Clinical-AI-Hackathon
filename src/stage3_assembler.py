@@ -155,11 +155,18 @@ def assemble_excel(structured_files: list, excel_dir: str, json_dir: str) -> str
         def _flatten(d):
             for k, v in d.items():
                 if isinstance(v, dict) and 'value' in v:
+                    raw_value = v.get('value')
                     source_txt = v.get('source_text')
-                    if source_txt:
+
+                    # De-tokenise both values and source text so outputs are human-readable
+                    if isinstance(raw_value, str):
+                        for token, orig_val in token_map.items():
+                            raw_value = raw_value.replace(token, str(orig_val))
+                    if isinstance(source_txt, str):
                         for token, orig_val in token_map.items():
                             source_txt = source_txt.replace(token, str(orig_val))
-                    flattened[k] = {"value": v.get('value'), "source_text": source_txt, "confidence": v.get('confidence')}
+
+                    flattened[k] = {"value": raw_value, "source_text": source_txt, "confidence": v.get('confidence')}
                 elif isinstance(v, dict):
                     _flatten(v)
         _flatten(s_data)

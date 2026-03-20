@@ -93,7 +93,8 @@ def structure_case(anonymised_json_path: str, output_dir: str) -> str:
         raise ValueError("GOOGLE_API_KEY environment variable not set")
         
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.0-flash') # Latest stable model with JSON support
+    # Using 'gemini-1.5-flash' since 'pro' is limited to only 2 requests per minute on the Free Tier!
+    model = genai.GenerativeModel('gemini-1.5-flash')
     
     with open(anonymised_json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -138,6 +139,15 @@ Expected Schema:
 """
     
     start_time = time.time()
+    
+    # Disable safety settings that frequently false-positive on clinical/cancer terminology.
+    safety_settings = [
+        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+    ]
+    
     for attempt in range(3):
         try:
             response = model.generate_content(
@@ -146,7 +156,8 @@ Expected Schema:
                     response_mime_type="application/json",
                     temperature=0.0,
                     max_output_tokens=8192
-                )
+                ),
+                safety_settings=safety_settings
             )
             raw_output = response.text
             
@@ -178,24 +189,25 @@ Expected Schema:
                 log_file.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] case_index={case_index} | HTTP 200 | {time_ms}ms | fields_extracted={final_data['metadata']['fields_extracted']} | fields_flagged={final_data['metadata']['fields_flagged']}\n")
                 
             return structured_output_path
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
             if attempt == 2:
                 final_data = apply_safety_flags(_empty_structured(case_index, is_restaging_mri), segments)
                 final_data['verification_required'] = True
-                final_data['verification_reasons'] = "API failure — manual extraction required"
+                final_data['verification_reasons'] = f"API failure — manual extraction required (JSON Decode Error)"
                 with open(structured_output_path, 'w', encoding='utf-8') as f:
                     json.dump(final_data, f, indent=2)
                 return structured_output_path
             time.sleep(2 ** (attempt + 1)) # Backoff
-        except Exception:
+        except Exception as e:
             if attempt == 2:
                 final_data = apply_safety_flags(_empty_structured(case_index, is_restaging_mri), segments)
                 final_data['verification_required'] = True
-                final_data['verification_reasons'] = "API failure — manual extraction required"
+                # Log actual exception string to help user diagnose exact error (e.g. Rate Limit vs Safety vs Auth)
+                final_data['verification_reasons'] = f"API failure — manual extraction required ({type(e).__name__}: {str(e)})"
                 with open(structured_output_path, 'w', encoding='utf-8') as f:
                     json.dump(final_data, f, indent=2)
                 return structured_output_path
-            time.sleep(2 ** (attempt + 1)) # Backoff
+            time.sleep(15) # Longer backoff in case of rate limits (Free tier is often 15 RPM)
 
 def stage2_and_3_pipeline(anonymised_json_dir: str, raw_json_dir: str, output_dir: str, api_key: str):
     from stage3_assembler import assemble_excel

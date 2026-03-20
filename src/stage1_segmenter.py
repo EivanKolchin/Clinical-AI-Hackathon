@@ -31,7 +31,7 @@ class Stage1Segmenter:
     CLASSIFICATION_RULES = [
         {
             "bucket": "restaging_mri_findings",
-            "must_have": ["mri", "magnetic resonance"],
+            "regex_pattern": r"\b(mri|magnetic resonance)\b",
             "must_have_any_of": [
                 "restaging", "post-treatment", "post-crt", "post-scprt",
                 "response assessment", "re-staging", "post treatment",
@@ -41,32 +41,24 @@ class Stage1Segmenter:
         },
         {
             "bucket": "mri_findings",
-            "must_have": ["mri", "magnetic resonance"],
+            "regex_pattern": r"\b(mri|magnetic resonance)\b",
             "must_have_any_of": [],
-            "exclude_if_matches": ["restaging"]
+            "exclude_if_matches": ["restaging", "post-treatment", "post-crt", "post-scprt", "re-staging"]
         },
         {
             "bucket": "ct_findings",
-            "must_have_any_of": [
-                " ct ", "ct scan", "computed tomography", "ct imaging",
-                "ct staging", "abdominal ct"
-            ]
+            "regex_pattern": r"\b(ct|ct scan|computed tomography)\b",
+            "must_have_any_of": []
         },
         {
             "bucket": "pathology",
-            "must_have_any_of": [
-                "biopsy", "histology", "histological", "mmr", "msi",
-                "mutation", "kras", "nras", "braf", "her2", "adenocarcinoma",
-                "carcinoma"
-            ]
+            "regex_pattern": r"\b(biopsy|histology|histological|mmr|msi|mutation|kras|nras|braf|her2|adenocarcinoma|carcinoma)\b",
+            "must_have_any_of": []
         },
         {
             "bucket": "mdt_outcome",
-            "must_have_any_of": [
-                "outcome", "decision", "plan", "mdt", "for surgery",
-                "for radiotherapy", "for chemotherapy", "curative", "palliative",
-                "tme", "scprt", "crt"
-            ]
+            "regex_pattern": r"\b(outcome|decision|plan|mdt|surgery|radiotherapy|chemotherapy|curative|palliative|tme|scprt|crt)\b",
+            "must_have_any_of": []
         },
         {
             "bucket": "demographics",
@@ -76,10 +68,8 @@ class Stage1Segmenter:
         },
         {
             "bucket": "diagnosis",
-            "must_have_any_of": [
-                "diagnosis", "diagnosed", "cancer", "tumour", "tumor",
-                "sigmoid", "rectal", "colorectal", "adenocarcinoma"
-            ]
+            "regex_pattern": r"\b(diagnosis|diagnosed|cancer|tumour|tumor|sigmoid|rectal|colorectal|adenocarcinoma)\b",
+            "must_have_any_of": []
         },
         {
             "bucket": "clinical_history",
@@ -126,12 +116,13 @@ class Stage1Segmenter:
             # Regex pattern match
             if "regex_pattern" in rule:
                 if re.search(rule["regex_pattern"], sentence, re.IGNORECASE):
-                    # Check must_have_any_of if it exists
-                    if rule.get("must_have_any_of"):
-                        if any(kw in sentence_lower for kw in rule["must_have_any_of"]):
+                    if not self._has_exclusion(sentence_lower, rule):
+                        # Check must_have_any_of if it exists
+                        if rule.get("must_have_any_of"):
+                            if any(kw in sentence_lower for kw in rule["must_have_any_of"]):
+                                return bucket
+                        else:
                             return bucket
-                    else:
-                        return bucket
             
             # must_have rule (ALL keywords must be present)
             if "must_have" in rule:
