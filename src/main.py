@@ -102,18 +102,16 @@ def main(docx_path: str, output_dir: str = "output"):
     print("Stage 2: LLM Structuring with Gemini")
     print("-" * 40)
     structured_files = []
-    cases_with_structures = []
     
     for anonymised_file in anonymised_files:
         case_idx = Path(anonymised_file).stem.replace("case_", "").replace("_anonymised", "")
         try:
             print(f"  Processing case {case_idx}...")
             result = structure_case(anonymised_file, str(json_dir))
-            if result:
+            if result and Path(result).exists():
                 structured_files.append(result)
-                cases_with_structures.append(case_idx)
             else:
-                print(f"⚠️  Stage 2 returned None for case {case_idx}")
+                print(f"⚠️  Stage 2 returned unexpected result for case {case_idx}")
         except Exception as e:
             print(f"❌ Stage 2 failed for case {case_idx}: {e}")
             continue

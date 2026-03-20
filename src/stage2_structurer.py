@@ -77,7 +77,21 @@ def validate_response(response_json: dict, original_segments: dict) -> dict:
     return response_json
 
 
-def structure_case(anonymised_json_path: str, structured_output_path: str, api_key: str):
+def structure_case(anonymised_json_path: str, output_dir: str) -> str:
+    """
+    Structure a case using Gemini API.
+    
+    Args:
+        anonymised_json_path: Path to case_*_anonymised.json file
+        output_dir: Directory to write case_*_structured.json output
+        
+    Returns:
+        Path to the generated structured JSON file
+    """
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        raise ValueError("GOOGLE_API_KEY environment variable not set")
+        
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-1.5-pro-latest') # JSON mode model
     
@@ -89,12 +103,15 @@ def structure_case(anonymised_json_path: str, structured_output_path: str, api_k
     is_restaging_mri = data.get('is_restaging_mri', False)
     stage1_failed = data.get('stage1_validation_failed', False)
     
+    # Generate output path
+    structured_output_path = os.path.join(output_dir, f"case_{case_index:03d}_structured.json")
+    
     # If stage 1 failed, write not-found doc and skip API
     if stage1_failed:
         final_data = apply_safety_flags(_empty_structured(case_index, is_restaging_mri, True), segments)
         with open(structured_output_path, 'w', encoding='utf-8') as f:
             json.dump(final_data, f, indent=2)
-        return
+        return structured_output_path
     
     # System + user content to enforce provenance triad and bucket discipline
     system_prompt = (
@@ -153,22 +170,24 @@ Every field must have keys value, source_text, confidence.
             with open('logs/api_responses.log', 'a') as log_file:
                 log_file.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] case_index={case_index} | HTTP 200 | {time_ms}ms | fields_extracted={final_data['metadata']['fields_extracted']} | fields_flagged={final_data['metadata']['fields_flagged']}\n")
                 
-            return
+            return structured_output_path
         except json.JSONDecodeError:
             if attempt == 2:
                 final_data = apply_safety_flags(_empty_structured(case_index, is_restaging_mri), segments)
                 final_data['verification_required'] = True
-                final_data['verification_reasons'] = "API failure \u2014 manual extraction required"
+                final_data['verification_reasons'] = "API failure — manual extraction required"
                 with open(structured_output_path, 'w', encoding='utf-8') as f:
                     json.dump(final_data, f, indent=2)
+                return structured_output_path
             time.sleep(2 ** (attempt + 1)) # Backoff
         except Exception:
             if attempt == 2:
                 final_data = apply_safety_flags(_empty_structured(case_index, is_restaging_mri), segments)
                 final_data['verification_required'] = True
-                final_data['verification_reasons'] = "API failure \u2014 manual extraction required"
+                final_data['verification_reasons'] = "API failure — manual extraction required"
                 with open(structured_output_path, 'w', encoding='utf-8') as f:
                     json.dump(final_data, f, indent=2)
+                return structured_output_path
             time.sleep(2 ** (attempt + 1)) # Backoff
 
 def stage2_and_3_pipeline(anonymised_json_dir: str, raw_json_dir: str, output_dir: str, api_key: str):

@@ -50,7 +50,20 @@ COLUMN_MAP = {
     "verification_reasons": "Verification Reasons"
 }
 
-def assemble_excel(raw_json_dir: str, structured_json_dir: str, output_file: str) -> None:
+def assemble_excel(structured_files: list, excel_dir: str, json_dir: str) -> str:
+    """
+    Assemble Excel workbook from structured cases.
+    
+    Args:
+        structured_files: List of paths to case_*_structured.json files
+        excel_dir: Output directory for Excel file
+        json_dir: Directory containing raw case JSON files (for token reversal)
+    
+    Returns:
+        Path to generated Excel file
+    """
+    from datetime import datetime
+    
     wb = openpyxl.Workbook()
     ws1 = wb.active
     ws1.title = "MDT Data"
@@ -97,7 +110,6 @@ def assemble_excel(raw_json_dir: str, structured_json_dir: str, output_file: str
     ws1.freeze_panes = ws1['C2']
 
     # Load data and pre-sort by MDT date (DD/MM/YYYY)
-    struct_files = glob.glob(os.path.join(structured_json_dir, 'case_*_structured.json'))
     case_bundle = []
 
     def _mdt_key(date_str: str):
@@ -107,13 +119,28 @@ def assemble_excel(raw_json_dir: str, structured_json_dir: str, output_file: str
         except Exception:
             return (9999, 12, 31)
 
-    for s_file in struct_files:
+    for s_file in structured_files:
         with open(s_file, 'r', encoding='utf-8') as sf:
             s_data = json.load(sf)
         case_index = s_data.get('case_index', 0)
-        raw_file = os.path.join(raw_json_dir, f"case_{case_index}_raw.json")
-        with open(raw_file, 'r', encoding='utf-8') as rf:
-            r_data = json.load(rf)
+        
+        # Try multiple naming conventions for raw file
+        raw_file = None
+        for candidate in [
+            os.path.join(json_dir, f"case_{case_index:03d}.json"),
+            os.path.join(json_dir, f"case_{case_index}_raw.json"),
+        ]:
+            if os.path.exists(candidate):
+                raw_file = candidate
+                break
+        
+        if not raw_file:
+            print(f"⚠️ Warning: Could not find raw file for case {case_index:03d}")
+            r_data = {"patient_identifiers": {}, "token_map": {}}
+        else:
+            with open(raw_file, 'r', encoding='utf-8') as rf:
+                r_data = json.load(rf)
+        
         case_bundle.append((s_data, r_data))
 
     for s_data, r_data in sorted(case_bundle, key=lambda x: _mdt_key(x[1].get('patient_identifiers', {}).get('mdt_date', ''))):
@@ -187,4 +214,9 @@ def assemble_excel(raw_json_dir: str, structured_json_dir: str, output_file: str
             adjusted_width = min((max_length + 2), 40)
             ws.column_dimensions[column].width = adjusted_width
 
-    wb.save(output_file)    
+    # Generate output filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = os.path.join(excel_dir, f"MDT_Extraction_{timestamp}.xlsx")
+    
+    wb.save(output_file)
+    return output_file
