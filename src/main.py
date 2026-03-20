@@ -6,13 +6,13 @@ Runs all stages in sequence: Stage 1 → Data Minimisation → Stage 2 → Stage
 import argparse
 import sys
 import os
+import json
 import glob
 from pathlib import Path
 from stage1_segmenter import segment_document
 from data_minimisation import anonymise_case
 from stage2_structurer import structure_case
 from stage3_assembler import assemble_excel
-from safety_flags import apply_safety_flags
 
 
 def main(docx_path: str, output_dir: str = "output"):
@@ -124,12 +124,15 @@ def main(docx_path: str, output_dir: str = "output"):
     flagged_count = 0
     for struct_file in structured_files:
         try:
-            result = apply_safety_flags(struct_file)
-            if result and result.get("flags"):
+            # Load the structured JSON to check flags (already applied in Stage 2)
+            with open(struct_file, 'r', encoding='utf-8') as f:
+                struct_data = json.load(f)
+            if struct_data.get('verification_required'):
                 flagged_count += 1
-                print(f"⚠️  Case {Path(struct_file).stem.replace('case_', '').replace('_structured', '')} flagged for review")
+                case_idx = struct_data.get('case_index', '?')
+                print(f"⚠️  Case {case_idx:03d} flagged | Reason: {struct_data.get('verification_reasons', 'unknown')}")
         except Exception as e:
-            print(f"⚠️  Safety flag check failed: {e}")
+            print(f"⚠️  Could not check flags for {struct_file}: {e}")
             continue
     
     print(f"✓ {flagged_count} cases flagged for review\n")
@@ -138,8 +141,6 @@ def main(docx_path: str, output_dir: str = "output"):
     print("Stage 3: Excel Assembly")
     print("-" * 40)
     try:
-        # Get all structured files
-        structured_files = sorted(glob.glob(str(json_dir / "*_structured.json")))
         if structured_files:
             output_file = assemble_excel(structured_files, str(excel_dir), str(json_dir))
             print(f"✓ Excel workbook: {output_file}\n")
