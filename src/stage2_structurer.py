@@ -3,7 +3,7 @@ import time
 import os
 import google.generativeai as genai
 from tqdm import tqdm
-from .safety_flags import apply_safety_flags
+from safety_flags import apply_safety_flags
 
 # Expected field scaffold to guarantee schema compliance and deterministic fallbacks
 EMPTY_FIELD = {"value": None, "source_text": None, "confidence": "not_found"}
@@ -198,7 +198,7 @@ Expected Schema:
             time.sleep(2 ** (attempt + 1)) # Backoff
 
 def stage2_and_3_pipeline(anonymised_json_dir: str, raw_json_dir: str, output_dir: str, api_key: str):
-    from .stage3_assembler import assemble_excel
+    from stage3_assembler import assemble_excel
     import glob
     
     os.makedirs(output_dir, exist_ok=True)
